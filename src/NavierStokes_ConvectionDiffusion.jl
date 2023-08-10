@@ -34,8 +34,8 @@ export NavierStokes_ConvectionDiffusion_params, solve_NSCD
 function solve_NSCD(params)
 
   # Define the domain
-  @unpack H,L,ne = params
-  𝒯 = CartesianDiscreteModel((0,L,0,2H), (ne,ne))
+  @unpack H,L,nex,ney = params
+  𝒯 = CartesianDiscreteModel((0,L,0,2H), (nex,ney))
   Ω = Interior(𝒯)
 
   # Divide channel
@@ -64,14 +64,15 @@ function solve_NSCD(params)
   Γtop = Boundary(Ω, tags="top")
   Γb = Boundary(Ω, tags="bottom")
   nfp = get_normal_vector(Γfp)
+  nb = get_normal_vector(Γb)
 
   # Boundary condition
   @unpack U∞ = params
-  uin((x,y),t) = VectorValue(3/2*U∞*(1.0-(y/(2H))^2),0.0)
+  uin((x,y),t) = VectorValue(3/2*U∞*(1.0-(y/H)^2),0.0)*(y<H) + VectorValue(0.0,0.0)*(y>=H)
   uin(t::Real) = x -> uin(x,t)
   utop((x,y),t) = VectorValue(0.0,0.0)
   utop(t::Real) = x -> utop(x,t)
-  ϕin((x,y),t) = 1.0 * (y<H)
+  ϕin((x,y),t) = 35000 * (y<H)
   ϕin(t::Real) = x -> ϕin(x,t)
 
   # Define the finite element spaces
@@ -79,8 +80,8 @@ function solve_NSCD(params)
   reffeᵤ = ReferenceFE(lagrangian,VectorValue{2,Float64},order)
   reffeₚ = ReferenceFE(lagrangian,Float64,order-1)
   reffeᵩ = ReferenceFE(lagrangian,Float64,order)
-  V = TestFESpace(Ω,reffeᵤ, conformity=:H1, dirichlet_tags=["inlet","top"])
-  U = TransientTrialFESpace(V, [uin,utop])
+  V = TestFESpace(Ω,reffeᵤ, conformity=:H1, dirichlet_tags=["inlet","top","bottom"],dirichlet_masks=[(true,true),(true,true),(false,true)])
+  U = TransientTrialFESpace(V, [uin,utop,utop])
   Q = TestFESpace(Ω,reffeₚ, conformity=:L2)
   P = TrialFESpace(Q)
   Ψ = TestFESpace(Ω,reffeᵩ, conformity=:L2, dirichlet_tags=["inlet"])
@@ -97,24 +98,28 @@ function solve_NSCD(params)
   degree = 2*order
   dΩ = Measure(Ω,degree)
   dΓfp = Measure(Γfp,degree)
+  dΓb = Measure(Γb,degree)
 
   # Operators
-  @unpack μ,ρw,ρs,𝒟,K = params
-  res(t,(u,p,ϕ),(v,q,ψ)) = ∫( (∂t(u) + (u⋅∇(u))) ⋅ v + μ*(∇(u)⊙∇(v)) - p*(∇⋅v) + q*(∇⋅u) +
-                              (∂t(ϕ) + (u⋅∇(ϕ))) ⋅ ψ + 𝒟*(∇(ϕ)⊙∇(ψ)) )dΩ -
-                              # ∫( K*(jump(ϕ)*mean(ψ)) + 𝒟*(mean(∇(ϕ))⋅jump(ψ⊗nfp)))dΓfp
-                              ∫( K*(jump(ϕ)*mean(ψ)) )dΓfp
+  @unpack μ,ρw,ρs,𝒟,K,C,T = params
+  ν = μ/ρw
+  res(t,(u,p,ϕ),(v,q,ψ)) = ∫( (∂t(u) + (u⋅∇(u))) ⋅ v + ν*(∇(u)⊙∇(v)) - p*(∇⋅v) + q*(∇⋅u) +
+                              ρw*(∂t(ϕ) + (u⋅∇(ϕ))) ⋅ ψ + ρw*𝒟*(∇(ϕ)⊙∇(ψ)) )dΩ +
+                              ∫(p*nb⋅v)dΓb -
+                              ∫( ρw*(mean(u)⋅nfp.⁺)*(jump(ϕ)*mean(ψ)) + ρw*𝒟*(mean(∇(ϕ))⋅jump(ψ⊗nfp)) -
+                                 1/K*((mean(u) + C*T*jump(ϕ*nfp))⋅mean(v)))dΓfp
   jac(t,(u,p,ϕ),(du,dp,dϕ),(v,q,ψ)) = ∫( ((du⋅∇(u)) + (u⋅∇(du))) ⋅ v + μ*(∇(du)⊙∇(v)) - dp*(∇⋅v) + q*(∇⋅du) +
-                              ((du⋅∇(ϕ)) + (u⋅∇(dϕ))) ⋅ ψ + 𝒟*(∇(dϕ)⊙∇(ψ)) )dΩ -
-                              # ∫( K*(jump(dϕ)*mean(ψ)) + 𝒟*(mean(∇(dϕ))⋅jump(ψ⊗nfp)))dΓfp
-                              ∫( K*(jump(dϕ)*mean(ψ)) )dΓfp
-  jac_t(t,(u,p,ϕ),(dut,dpt,dϕt),(v,q,ψ)) = ∫( (dut) ⋅ v + (dϕt) ⋅ ψ )dΩ
+                                          ρw*((du⋅∇(ϕ)) + (u⋅∇(dϕ))) ⋅ ψ + 𝒟*(∇(dϕ)⊙∇(ψ)) )dΩ +
+                                          ∫(dp*nb⋅v)dΓb -
+                                      ∫( ρw*(mean(du)⋅nfp.⁺)*(jump(ϕ)*mean(ψ)) + ρw*(mean(u)⋅nfp.⁺)*(jump(dϕ)*mean(ψ)) +
+                                         ρw*𝒟*(mean(∇(dϕ))⋅jump(ψ⊗nfp)) - 1/K*((mean(du) + C*T*jump(dϕ*nfp))⋅mean(v)))dΓfp
+  jac_t(t,(u,p,ϕ),(dut,dpt,dϕt),(v,q,ψ)) = ∫( (dut) ⋅ v + ρw*(dϕt) ⋅ ψ )dΩ
   op = TransientFEOperator(res,jac,jac_t,X,Y)
 
   # Solver
   @unpack Δt,tf = params
   nls = NLSolver(show_trace=true,method=:newton,iterations=15)
-  ode_solver = ThetaMethod(nls,Δt,0.5)
+  ode_solver = ThetaMethod(nls,Δt,1.0)
 
   # solution
   xₕₜ = solve(ode_solver,op,xₕ₀,0.0,tf)
@@ -138,16 +143,19 @@ This type defines a Parameters object with the default parameters for the
   NS_CD problem.
 """
 @with_kw struct NavierStokes_ConvectionDiffusion_params
-  H::Float64 = 1.0 # Height of the half-channel
-  L::Float64 = 2.0 # Length of the channel
-  μ::Float64 = 1.0 # Viscosity
-  𝒟::Float64 = 1.0 # Diffusion coefficient
-  K::Float64 = 1.0 # Permeability of the membrane
-  ρw::Float64 = 1.0 # Density of water
-  ρs::Float64 = 1.0 # Density of salt
-  ne::Int = 2 # Number of elements in each direction
+  H::Float64 = 4.0e-1 # Height of the half-channel
+  L::Float64 = 1.0 # Length of the channel
+  μ::Float64 = 1.0e-0 # Dynamic viscosity
+  𝒟::Float64 = 1.69e-0 # Diffusion coefficient
+  K::Float64 = 3.6e-0 # Permeability of the membrane
+  C::Float64 = 0.2641 # Concentration vs osmotic pressure coefficient
+  T::Float64 = 298.0 # Temperature
+  ρw::Float64 = 1.0e0 # Density of water
+  ρs::Float64 = 1.0e0 # Density of salt
+  nex::Int = 2 # Number of elements in x direction
+  ney ::Int = 2 # Number of elements in y direction
   order::Int = 1 # Order of the finite elements
-  U∞::Float64 = 1.0 # Inlet velocity
+  U∞::Float64 = 0.06 # Inlet velocity
   Δt::Float64 = 0.1 # Time step
   tf::Float64 = 0.1 # Final time
 end
