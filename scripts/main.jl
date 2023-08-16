@@ -23,9 +23,10 @@ params = NavierStokes_ConvectionDiffusion_params(
   L=1.0,
   μ=1.0e-3,
   𝒟=1.29e-9,
-  K=3.6e-3,
+  K=3.6e-12,
+  ρw=1.0e3,
   order=2,
-  nex=40,ney=20,tf=1.0)
+  nex=40,ney=20,tf=0.2)
 solve_NSCD(params)
 
 end
