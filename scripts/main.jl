@@ -53,7 +53,7 @@ params = NavierStokes_ConvectionDiffusion_static_params(
   μ=8.9e-4,
   ρw=1.027e3,
   𝒟=1.5e-9,
-  U∞=0.0645,
+  U∞=0.129,
   ϕ∞=600,
   order=2,
   nex=200,ney=40,

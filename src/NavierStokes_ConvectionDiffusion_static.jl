@@ -91,7 +91,7 @@ function solve_NSCD_static(params)
   dΓout = Measure(Γout,degree)
 
   # Physics parameters
-  @unpack μ,ρw,ρs,𝒟,K,C,T,ΔP,I₀,κ = params
+  @unpack μ,ρw,𝒟,ΔP,I₀,κ = params
 
   # Mesh related variables
   h = CellField(lazy_map(dx->dx^(1/2),get_cell_measure(Ω)),Ω)
@@ -118,11 +118,14 @@ function solve_NSCD_static(params)
   nls = NLSolver(show_trace=true,method=:newton,iterations=10)
 
   # solution
-  xₕ = solve(nls,op)
+  uₕ,pₕ,ϕₕ = solve(nls,op)
 
   # Post-processing
   filename = datadir("sims","sol")
-  writevtk(Ω,filename,cellfields=["u"=>xₕ[1],"p"=>xₕ[2],"phi"=>xₕ[3]],order=order)
+  writevtk(Ω,filename,cellfields=["u"=>uₕ,"p"=>pₕ,"phi"=>ϕₕ],order=order)
+
+  m = ρw*L*(∑(∫(abs(uₕ⋅nΓₘ))dΓₘ))
+  println("Mass flow rate: ",m)
 
   return nothing
 
@@ -139,11 +142,10 @@ This type defines a Parameters object with the default parameters for the
   L::Float64 = 1.0 # Length of the channel
   μ::Float64 = 1.0e-0 # Dynamic viscosity
   𝒟::Float64 = 1.69e-0 # Diffusion coefficient
-  K::Float64 = 3.6e-0 # Permeability of the membrane
-  C::Float64 = 0.2641 # Concentration vs osmotic pressure coefficient
-  T::Float64 = 298.0 # Temperature
+  # K::Float64 = 3.6e-0 # Permeability of the membrane
+  # C::Float64 = 0.2641 # Concentration vs osmotic pressure coefficient
+  # T::Float64 = 298.0 # Temperature
   ρw::Float64 = 1.0e0 # Density of water
-  ρs::Float64 = 1.0e0 # Density of salt
   nex::Int = 3 # Number of elements in x direction
   ney ::Int = 3 # Number of elements in y direction
   order::Int = 2 # Order of the finite elements
