@@ -108,12 +108,12 @@ end
   nout = get_normal_vector(Γout)
 
   # Boundary condition
-  @unpack U∞,ϕ∞ = params
+  @unpack U∞ = params
   uin((x,y),t) = VectorValue(3/2*U∞*(1.0-(y/H)^2),0.0)*(y<H) + VectorValue(0.0,0.0)*(y>=H)
   uin(t::Real) = x -> uin(x,t)
   utop((x,y),t) = VectorValue(0.0,0.0)
   utop(t::Real) = x -> utop(x,t)
-  ϕin((x,y),t) = ϕ∞ * (y<H)
+  ϕin((x,y),t) = 35000 * (y<H)
   ϕin(t::Real) = x -> ϕin(x,t)
   pout((x,y)) = 1.0e2 * (y<H)
 
@@ -134,8 +134,8 @@ end
   Φp = TransientTrialFESpace(Ψp,ϕin)
   ΗΦf = TrialFESpace(Ψf,0.0)
   ΗΦp = TrialFESpace(Ψp,0.0)
-  X = TransientMultiFieldFESpace([U,Pf,Pp,Φf,Φp,ΗΦf,ΗΦp])
-  Y = MultiFieldFESpace([V,Qf,Qp,Ψf,Ψp,Ψf,Ψp])
+  X = TransientMultiFieldFESpace([U,Pf,Pp,Φf,Φp])
+  Y = MultiFieldFESpace([V,Qf,Qp,Ψf,Ψp])
 
   Η = TrialFESpace(V, [utop(0.0),utop(0.0),utop(0.0),utop(0.0)])
 
@@ -177,7 +177,6 @@ end
   τₘ = 1/(c₁*ν/h2 + c₂*(meas∘uₙₕ)/h)
   τc = cc *(h2/(c₁*τₘ))
   τₘᵩ(u) = 1/(c₁*(𝒟)/h2 + c₂*((u⋅u).^(1/2))/h)
-  β = 1.0
 
   # Auxiliar jump Operators
   jumpfpn(uf,up) = uf.⁺⋅nfp.⁺ - up.⁻⋅nfp.⁺
@@ -186,36 +185,32 @@ end
   ny = VectorValue(0.0,1.0)
 
   # Operators
-  res(t,(u,pf,pp,ϕf,ϕp,ηϕf,ηϕp),(v,qf,qp,ψf,ψp,κf,κp)) =
+  res(t,(u,pf,pp,ϕf,ϕp),(v,qf,qp,ψf,ψp)) =
     ∫( (∂t(u) + (u⋅∇(u))) ⋅ v + ν*(∇(u)⊙∇(v)) +
        τₘ*((∇(u)'⋅u - ηₙₕ)⋅(∇(v)'⋅u)) + τc*((∇⋅u)*(∇⋅v)) )dΩ +
     ∫( qf*(∇⋅u) - pf*(∇⋅v) + (∂t(ϕf) + (u⋅∇(ϕf))) ⋅ ψf + 𝒟*(∇(ϕf)⊙∇(ψf)) +
-       τₘᵩ(u)*((∇(ϕf)'⋅u - ηϕf)⋅((∇(ψf)'⋅u)-κf)) )dΩf +
+       τₘᵩ(u)*((∂t(ϕf) + (∇(ϕf)'⋅u))⋅(∇(ψf)'⋅u)) )dΩf +
     ∫( qp*(∇⋅u) - pp*(∇⋅v) + (∂t(ϕp) + (u⋅∇(ϕp))) ⋅ ψp + 𝒟*(∇(ϕp)⊙∇(ψp)) +
-       τₘᵩ(u)*((∇(ϕp)'⋅u - ηϕp)⋅((∇(ψp)'⋅u)-κp)) )dΩp +
-    ∫( nfp.⁺⋅(jumpfpn(pf,pp) - ν*(jump(∇(u)⋅nfp)))*(mean(v)⋅nfp.⁺)  +
-       nfp.⁺⋅((jumpfpn(qf,qp) - ν*(jump(∇(v)⋅nfp))) + β/h*(mean(v)⋅nfp.⁺))*(mean(u)⋅nfp.⁺ - K*(jumpfp(pf,pp)- C*T*jumpfp(ϕf,ϕp)) ) -
-       (mean(u)⋅nfp.⁺)*(jumpfp(ϕf,ϕp)*meanfp(ψf,ψp)) - 𝒟*(meanfp(∇(ϕf),∇(ϕp))⋅jumpfpn(ψf,ψp)) )dΓfp +
+       τₘᵩ(u)*((∂t(ϕp) + (∇(ϕp)'⋅u))⋅(∇(ψp)'⋅u)) )dΩp -
+    ∫( -1.0*K*(jumpfp(ϕf,ϕp)*meanfp(ψf,ψp)) + 𝒟*(meanfp(∇(ϕf),∇(ϕp))⋅jumpfpn(ψf,ψp)) -
     # ∫( (mean(u)⋅nfp.⁺)*(jumpfp(ϕf,ϕp)*meanfp(ψf,ψp)) + 𝒟*(meanfp(∇(ϕf),∇(ϕp))⋅jumpfpn(ψf,ψp)) -
     # ∫(  𝒟*(jumpfpn(∇(ϕf),∇(ϕp))⋅meanfp(ψf,ψp)) + 𝒟*(meanfp(∇(ϕf),∇(ϕp))⋅jumpfpn(ψf,ψp)) -
-        # 1/ρw*(1/K*(mean(u)⋅nfp.⁺)*(mean(v)⋅nfp.⁺) + C*T*(jumpfp(ϕf,ϕp)*(mean(v)⋅nfp.⁺))) + ν*(jump(∇(u)⋅nfp)⋅mean(v)))dΓfp +
+        1/ρw*(1/K*(mean(u)⋅nfp.⁺)*(mean(v)⋅nfp.⁺) + C*T*(jumpfp(ϕf,ϕp)*(mean(v)⋅nfp.⁺))) + ν*(jump(∇(u)⋅nfp)⋅mean(v)))dΓfp +
     ∫( pout*nout⋅v )dΓout
-  jac(t,(u,pf,pp,ϕf,ϕp,ηϕf,ηϕp),(du,dpf,dpp,dϕf,dϕp,dηϕf,dηϕp),(v,qf,qp,ψf,ψp,κf,κp)) =
+  jac(t,(u,pf,pp,ϕf,ϕp),(du,dpf,dpp,dϕf,dϕp),(v,qf,qp,ψf,ψp)) =
     ∫( ((du⋅∇(u)) + (u⋅∇(du))) ⋅ v + μ*(∇(du)⊙∇(v)) +
         τₘ*((∇(u)'⋅u - ηₙₕ)⋅(∇(v)'⋅du) + (∇(du)'⋅u + ∇(u)'⋅du)⋅(∇(v)'⋅u)) + τc*((∇⋅du)*(∇⋅v)))dΩ +
     ∫( qf*(∇⋅du) - dpf*(∇⋅v) + ((u⋅∇(dϕf)) + (du⋅∇(ϕf))) ⋅ ψf + 𝒟*(∇(dϕf)⊙∇(ψf)) +
-        τₘᵩ(u)*( (∇(ϕf)'⋅u )⋅(∇(ψf)'⋅du) + (∇(dϕf)'⋅u + ∇(ϕf)'⋅du - dηϕf)⋅(∇(ψf)'⋅u) - (∇(dϕf)'⋅u + ∇(ϕf)'⋅du - dηϕf)⋅κf ))dΩf +
+        τₘᵩ(u)*( (∂t(ϕf) + (∇(ϕf)'⋅u ))⋅(∇(ψf)'⋅du) + (∇(dϕf)'⋅u + ∇(ϕf)'⋅du )⋅(∇(ψf)'⋅u) ))dΩf +
     ∫( qp*(∇⋅du) - dpp*(∇⋅v) + ρw*((u⋅∇(dϕp)) + (du⋅∇(ϕp))) ⋅ ψp + 𝒟*(∇(dϕp)⊙∇(ψp)) +
-        τₘᵩ(u)*( (∇(ϕp)'⋅u )⋅(∇(ψp)'⋅du) + (∇(dϕp)'⋅u + ∇(ϕp)'⋅du - dηϕp)⋅(∇(ψp)'⋅u) - (∇(dϕp)'⋅u + ∇(ϕp)'⋅du - dηϕp)⋅κp ))dΩp +
-    ∫( nfp.⁺⋅(jumpfpn(dpf,dpp) - ν*(jump(∇(du)⋅nfp)))*(mean(v)⋅nfp.⁺) +
-       nfp.⁺⋅((jumpfpn(qf,qp) - ν*(jump(∇(v)⋅nfp))) + β/h*(mean(v)⋅nfp.⁺))*(mean(du)⋅nfp.⁺ - K*(jumpfp(dpf,dpp)-C*T*jumpfp(dϕf,dϕp)) ) -
-       (mean(du)⋅nfp.⁺)*(jumpfp(ϕf,ϕp)*meanfp(ψf,ψp)) - (mean(u)⋅nfp.⁺)*(jumpfp(dϕf,dϕp)*meanfp(ψf,ψp)) - 𝒟*(meanfp(∇(dϕf),∇(dϕp))⋅jumpfpn(ψf,ψp)) )dΓfp
+        τₘᵩ(u)*( (∂t(ϕp) + (∇(ϕp)'⋅u ))⋅(∇(ψp)'⋅du) + (∇(dϕp)'⋅u + ∇(ϕp)'⋅du )⋅(∇(ψp)'⋅u) ))dΩp -
+    ∫( -1.0*K*(jumpfp(dϕf,dϕp)*meanfp(ψf,ψp))  +
     # ∫( ((mean(du)⋅nfp.⁺)*(jumpfp(ϕf,ϕp)*meanfp(ψf,ψp)) + (mean(u)⋅nfp.⁺)*(jumpfp(dϕf,dϕp)*meanfp(ψf,ψp))) +
     # ∫( 𝒟*(jumpfpn(∇(dϕf),∇(dϕp))⋅meanfp(ψf,ψp)) +
-        # 𝒟*(meanfp(∇(dϕf),∇(dϕp))⋅jumpfpn(ψf,ψp)) -
-          # 1/ρw*(1/K*(mean(du)⋅nfp.⁺)*(mean(v)⋅nfp.⁺) + C*T*(jumpfp(dϕf,dϕp)*(mean(v)⋅nfp.⁺))) + ν*(jump(∇(du)⋅nfp)⋅mean(v)))dΓfp
-  jac_t(t,(u,pf,pp,ϕf,ϕp,ηϕf,ηϕp),(dut,dpft,dppt,dϕft,dϕpt,dηϕft,dηϕpt),(v,qf,qp,ψf,ψp,κf,κp)) =
-    ∫( (dut) ⋅ v + (dϕft) ⋅ ψf )dΩf + ∫( (dut) ⋅ v + (dϕpt) ⋅ ψp )dΩp
+        𝒟*(meanfp(∇(dϕf),∇(dϕp))⋅jumpfpn(ψf,ψp)) -
+          1/ρw*(1/K*(mean(du)⋅nfp.⁺)*(mean(v)⋅nfp.⁺) + C*T*(jumpfp(dϕf,dϕp)*(mean(v)⋅nfp.⁺))) + ν*(jump(∇(du)⋅nfp)⋅mean(v)))dΓfp
+  jac_t(t,(u,pf,pp,ϕf,ϕp),(dut,dpft,dppt,dϕft,dϕpt),(v,qf,qp,ψf,ψp)) =
+    ∫( (dut) ⋅ v + (dϕft) ⋅ ψf + τₘᵩ(u)*((dϕft)⋅(∇(ψf)'⋅u)))dΩf + ∫( (dut) ⋅ v + (dϕpt) ⋅ ψp + τₘᵩ(u)*(dϕpt⋅(∇(ψp)'⋅u)) )dΩp
   op = TransientFEOperator(res,jac,jac_t,X,Y)
 
   # Orthogonal projection
@@ -232,7 +227,7 @@ end
 
   # Solver
   @unpack Δt,tf = params
-  nls = NLSolver(show_trace=true,method=:newton,iterations=5)
+  nls = NLSolver(show_trace=true,method=:newton,iterations=15)
   ode_solver = ThetaMethod(nls,Δt,1.0)
 
   # solution
@@ -241,8 +236,8 @@ end
   # Post-processing
   filename = datadir("sims","sol")
   createpvd(filename) do pvd
-    for ((uₕ,pfₕ,ppₕ,ϕfₕ,ϕpₕ,ηϕfₕ,ηϕpₕ),t) in xₕₜ
-      pvd[t] = createvtk(Ω,filename*"_$t",cellfields=["u"=>uₕ,"pf"=>pfₕ,"pp"=>ppₕ,"phif"=>ϕfₕ,"phip"=>ϕpₕ,"eta_u"=>ηₙₕ,"eta_phif"=>ηϕfₕ,"eta_phip"=>ηϕpₕ,"un"=>uₙₕ,"phifn"=>ϕfₙₕ,"phipn"=>ϕpₙₕ],order=order)
+    for ((uₕ,pfₕ,ppₕ,ϕfₕ,ϕpₕ),t) in xₕₜ
+      pvd[t] = createvtk(Ω,filename*"_$t",cellfields=["u"=>uₕ,"pf"=>pfₕ,"pp"=>ppₕ,"phif"=>ϕfₕ,"phip"=>ϕpₕ,"eta_u"=>ηₙₕ],order=order)
       uₙₕ = interpolate!(uₕ,fv_u,U(t))
       # ϕfₙₕ = interpolate!(ϕfₕ,fv_ϕf,Φf(t))
       # ϕpₙₕ = interpolate!(ϕpₕ,fv_ϕp,Φp(t))
@@ -276,7 +271,6 @@ This type defines a Parameters object with the default parameters for the
   ney ::Int = 2 # Number of elements in y direction
   order::Int = 2 # Order of the finite elements
   U∞::Float64 = 0.06 # Inlet velocity
-  ϕ∞::Float64 = 35000 # Initial feed concentration
   Δt::Float64 = 0.1 # Time step
   tf::Float64 = 0.1 # Final time
 end
