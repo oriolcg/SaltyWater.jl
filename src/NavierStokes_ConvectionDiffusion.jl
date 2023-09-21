@@ -76,7 +76,7 @@ function solve_NSCD(params)
       push!(array, (y_avg ≈ H) && (x_min > 0.0))
     end
     return array
-end 
+end
 =#
 
   # Define boundary tags
@@ -172,15 +172,15 @@ end
 
 #= Remove for the moment, no stabilization
   # Stabilization Parameters
-  c₁ = 12.0
+  c₁ = 4.0
   c₂ = 2.0
-  cc = 4.0
+  cc = 0.0
   h2 = CellField(get_cell_measure(Ω),Ω)
   h = CellField(lazy_map(dx->dx^(1/2),get_cell_measure(Ω)),Ω)
   τₘ = 1/(c₁*ν/h2 + c₂*(meas∘uₙₕ)/h)
   τc = 0.0*cc *(h2/(c₁*τₘ))
   τₘᵩ = 1/(c₁*(𝒟)/h2)# + c₂*(meas∘uₙₕ)/h)
-=# 
+=#
   # Auxiliar jump Operators
   #jumpfpn(uf,up) = uf.⁺⋅nfp.⁺ - up.⁻⋅nfp.⁺
   #jumpfp(uf,up) = uf.⁺ - up.⁻
@@ -191,19 +191,19 @@ end
   # Operators
   res(t,(u,pf,ϕf),(v,qf,ψf)) = ∫( (∂t(u) + (u⋅∇(u))) ⋅ v + ν*(∇(u)⊙∇(v)) )dΩ+
                               ∫( qf*(∇⋅u) - pf*(∇⋅v) + ρw*(∂t(ϕf) + (u⋅∇(ϕf)) ) ⋅ ψf + ρw*𝒟*(∇(ϕf)⊙∇(ψf)) )dΩ -
-                              ∫( ν*∇(u)⋅nfp⋅ v)dΓfp + ∫( pout*nout⋅v )dΓout + ∫((1/K*u ⋅ nfp + C*T*ϕf)⋅nfp⋅ v)dΓfp - ∫((ρw*(u ⋅ nfp)⋅ϕf)⋅ψf )dΓfp 
+                              ∫( ν*∇(u)⋅nfp⋅ v)dΓfp + ∫( pout*nout⋅v )dΓout + ∫((1/K*u ⋅ nfp + C*T*ϕf)⋅nfp⋅ v)dΓfp - ∫((ρw*(u ⋅ nfp)⋅ϕf)⋅ψf )dΓfp
   jac(t,(u,pf,ϕf),(du,dpf,dϕf),(v,qf,ψf)) = ∫( ((du⋅∇(u)) + (u⋅∇(du))) ⋅ v + ν*(∇(du)⊙∇(v)) + qf*(∇⋅du))dΩ + ∫((du⋅∇(ϕf)) ⋅ ψf)dΩ - ∫(((ν*∇(du)⋅nfp) - (du⋅nfp/K)*nfp)⋅v)dΓfp - ∫((ρw*(du ⋅ nfp)⋅ϕf)⋅ψf )dΓfp -
                                           ∫(dpf*(∇⋅v))dΩ +
-                                          ∫( ρw*(u⋅∇(dϕf))⋅ ψf + 𝒟*(∇(dϕf)⊙∇(ψf)))dΩ + ∫(((C*T*dϕf)⋅nfp) ⋅ v )dΓfp - ∫((ρw*(u ⋅ nfp)⋅dϕf)⋅ψf )dΓfp 
-  jac_t(t,(u,pf,ϕ),(dut,dpft,dϕft),(v,qf,ψf)) = ∫( (dut) ⋅ v + ρw*(dϕft) ⋅ ψf )dΩ 
-  
+                                          ∫( ρw*(u⋅∇(dϕf))⋅ ψf + 𝒟*(∇(dϕf)⊙∇(ψf)))dΩ + ∫(((C*T*dϕf)⋅nfp) ⋅ v )dΓfp - ∫((ρw*(u ⋅ nfp)⋅dϕf)⋅ψf )dΓfp
+  jac_t(t,(u,pf,ϕ),(dut,dpft,dϕft),(v,qf,ψf)) = ∫( (dut) ⋅ v + ρw*(dϕft) ⋅ ψf )dΩ
+
   # res(t,(u,pf,ϕf),(v,qf,ψf)) = ∫( (∂t(u) + (u⋅∇(u))) ⋅ v + ν*(∇(u)⊙∇(v)) )dΩ+
   #                             ∫( qf*(∇⋅u) - pf*(∇⋅v) + ρw*(∂t(ϕf) + (u⋅∇(ϕf))) ⋅ ψf + ρw*𝒟*(∇(ϕf)⊙∇(ψf)) )dΩ -
-  #                             ∫(ν*∇(u)⋅nfp⋅ v)dΓfp + ∫( pout*nout⋅v )dΓout + ∫((1/K*u ⋅ nfp + C*T*ϕf)⋅nfp⋅ v)dΓfp - ∫((ρw*(u ⋅ nfp)⋅ϕf)⋅ψf )dΓfp 
+  #                             ∫(ν*∇(u)⋅nfp⋅ v)dΓfp + ∫( pout*nout⋅v )dΓout + ∫((1/K*u ⋅ nfp + C*T*ϕf)⋅nfp⋅ v)dΓfp - ∫((ρw*(u ⋅ nfp)⋅ϕf)⋅ψf )dΓfp
   # jac(t,(u,pf,ϕf),(du,dpf,dϕf),(v,qf,ψf)) = ∫( ((du⋅∇(u)) + (u⋅∇(du))) ⋅ v + ν*(∇(du)⊙∇(v)))dΩ + ∫((du⋅∇(ϕf)) ⋅ ψf)dΩ - ∫(((ν*∇(du)⋅nfp) + (du⋅nfp/K)*nfp)⋅v)dΓfp - ∫((ρw*(du ⋅ nfp)⋅ϕf)⋅ψf )dΓfp -
   #                                         ∫(dpf*(∇⋅v))dΩ +
-  #                                         ∫(ρw*((u⋅∇(dϕf))⋅ ψf + 𝒟*(∇(dϕf)⊙∇(ψf))))dΩ + ∫(((C*T*dϕf)⋅nfp) ⋅ v )dΓfp - ∫((ρw*(u ⋅ nfp)⋅dϕf)⋅ψf )dΓfp 
-  # jac_t(t,(u,pf,ϕ),(dut,dpft,dϕft),(v,qf,ψf)) = ∫( (dut) ⋅ v + ρw*(dϕft) ⋅ ψf )dΩ 
+  #                                         ∫(ρw*((u⋅∇(dϕf))⋅ ψf + 𝒟*(∇(dϕf)⊙∇(ψf))))dΩ + ∫(((C*T*dϕf)⋅nfp) ⋅ v )dΓfp - ∫((ρw*(u ⋅ nfp)⋅dϕf)⋅ψf )dΓfp
+  # jac_t(t,(u,pf,ϕ),(dut,dpft,dϕft),(v,qf,ψf)) = ∫( (dut) ⋅ v + ρw*(dϕft) ⋅ ψf )dΩ
   op = TransientFEOperator(res,jac,jac_t,X,Y)
 
   # # Orthogonal projection
@@ -220,7 +220,7 @@ end
 
   # Solver
   @unpack Δt,tf = params
-  nls = NLSolver(show_trace=true,method=:newton,iterations=15)
+  nls = NLSolver(show_trace=true,method=:newton,iterations=5)
   ode_solver = ThetaMethod(nls,Δt,1.0)
 
   # solution
