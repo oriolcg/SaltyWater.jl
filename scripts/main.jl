@@ -5,7 +5,9 @@ using DrWatson
 
 # Here you may include files from the source directory
 include(srcdir("NavierStokes_ConvectionDiffusion.jl"))
+include(srcdir("NavierStokes_ConvectionDiffusion_static.jl"))
 using .NavierStokes_ConvectionDiffusion
+using .NavierStokes_ConvectionDiffusion_Static
 
 println(
 """
@@ -18,16 +20,16 @@ Path of active project: $(projectdir())
 # params = NavierStokes_ConvectionDiffusion_params()
 # solve_NSCD(params)
 
-params = NavierStokes_ConvectionDiffusion_params(
-  H=4.0e-2,
-  L=1.0,
-  μ=1.0e-3,
-  𝒟=1.29e-9,
-  K=3.6e-12,
-  ρw=1.0e3,
-  order=2,
-  nex=40,ney=20,tf=2e-5,Δt=1e-5)
-solve_NSCD(params)
+# params = NavierStokes_ConvectionDiffusion_params(
+#   H=4.0e-2,
+#   L=1.0,
+#   μ=1.0e-3,
+#   𝒟=1.29e-9,
+#   K=3.6e-12,
+#   ρw=1.0e3,
+#   order=2,
+#   nex=40,ney=20,tf=2e-5,Δt=1e-5)
+# solve_NSCD(params)
 # params = NavierStokes_ConvectionDiffusion_params(
 #   H=7.4e-4,
 #   L=1.5e-2,
@@ -41,5 +43,21 @@ solve_NSCD(params)
 #   nex=40,ney=40,
 #   ϕ∞=35000.0)
 # solve_NSCD(params)
+
+params = NavierStokes_ConvectionDiffusion_static_params(ney=6)
+solve_NSCD_static(params)
+
+params = NavierStokes_ConvectionDiffusion_static_params(
+  H=7.4e-4,
+  L=1.5e-2,
+  μ=8.9e-4,
+  ρw=1.027e3,
+  𝒟=1.5e-9,
+  U∞=0.0645,
+  ϕ∞=600,
+  order=2,
+  nex=200,ney=40,
+)
+solve_NSCD_static(params)
 
 end
