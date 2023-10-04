@@ -117,7 +117,7 @@ end
   utop(t::Real) = x -> utop(x,t)
   ϕin((x,y),t) = 35000 #* (y<H)
   ϕin(t::Real) = x -> ϕin(x,t)
-  pout((x,y)) = 6.0e3 #* (y<H)
+  pout((x,y)) = 4053000#6.0e3 #* (y<H)
 
   # Define the finite element spaces
   @unpack order = params
@@ -263,8 +263,7 @@ This type defines a Parameters object with the default parameters for the
   nex::Int = 2 # Number of elements in x direction
   ney ::Int = 2 # Number of elements in y direction
   order::Int = 2 # Order of the finite elements
-  U∞::Float64 = 0.06 # Inlet velocity
-  ϕ∞::Float64 = 35000 # Initial feed concentration
+  U∞::Float64 = 0.0645#0.06 # Inlet velocity
   Δt::Float64 = 0.1 # Time step
   tf::Float64 = 0.1 # Final time
 end
