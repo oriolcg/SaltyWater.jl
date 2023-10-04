@@ -81,7 +81,7 @@ function solve_NSCD_static(params)
   P = TrialFESpace(Q)
   Ψ = TestFESpace(Ω,reffeᵩ, conformity=:H1, dirichlet_tags=["inlet"])
   Φ = TrialFESpace(Ψ,ϕin)
-  X = TransientMultiFieldFESpace([U,P,Φ])
+  X = MultiFieldFESpace([U,P,Φ])
   Y = MultiFieldFESpace([V,Q,Ψ])
 
   # Measures

@@ -56,7 +56,7 @@ params = NavierStokes_ConvectionDiffusion_static_params(
   U∞=0.129,
   ϕ∞=600,
   order=2,
-  nex=200,ney=40,
+  nex=500,ney=20,
 )
 solve_NSCD_static(params)
 
