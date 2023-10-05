@@ -66,7 +66,7 @@ function solve_NSCD_static_withWT(params)
   nΓin = get_normal_vector(Γin)
 
   # Boundary condition
-  @unpack ϕ∞,pₒ = params 
+  @unpack ϕ∞,pₒ = params
   utop((x,y)) = VectorValue(0.0,0.0)
   ϕin((x,y)) = ϕ∞
   pout((x,y)) = pₒ
@@ -86,6 +86,8 @@ function solve_NSCD_static_withWT(params)
   Θ = TransientTrialFESpace(S)
   X = TransientMultiFieldFESpace([U,P,Φ,Θ])
   Y = MultiFieldFESpace([V,Q,Ψ,S])
+  X₀ = TransientMultiFieldFESpace([U,P,Φ])
+  Y₀ = MultiFieldFESpace([V,Q,Ψ])
 
 
   # Measures
@@ -101,7 +103,7 @@ function solve_NSCD_static_withWT(params)
   Uᵥ(t) = 1 # Wind velocity
   Γin_measured = ∑(∫(1.0)dΓin)
   U∞(θ)=Vᵥ*θ/Γin_measured
-  uin(θ) = x -> VectorValue(6*U∞(θ)*x[2]/H*(1.0-(x[2]/H)),0.0)
+  uin(θ) = (U∞ ∘ θ)*CellField(x->VectorValue(6*x[2]/H*(1.0-(x[2]/H)),0.0),Γin)
 
   # Mesh related variables
   h = CellField(lazy_map(dx->dx^(1/2),get_cell_measure(Ω)),Ω)
@@ -122,15 +124,27 @@ function solve_NSCD_static_withWT(params)
                          ∫( (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
                             α/h * (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * (v⋅nΓₘ) )dΓₘ +
                          ∫( pout*nout⋅v )dΓout +
-                         ∫(( (Jᵣ+Jₚ)*∂t(θ) - 1/2*ρₐ*Rᵣ*(Uᵥ(t))^2*Cₜ(θ,Uᵥ)+Vᵥ*(Pᵢ-p) )*s/Γin_measured + 
-                           (u-uin∘θ) ⋅ ( μ*∇(v)⋅nΓin - q*nΓin) + α/h * (u - uin∘θ) ⋅ v )dΓin
+                         ∫(( (Jᵣ+Jₚ)*∂t(θ) - 1/2*ρₐ*Rᵣ*(Uᵥ(t))^2*Cₜ(θ,Uᵥ)+Vᵥ*(Pᵢ-p) )*s/Γin_measured +
+                           (u-uin(θ)) ⋅ ( μ*∇(v)⋅nΓin - q*nΓin) + α/h * (u - uin(θ)) ⋅ v )dΓin
+  res₀(θ₀) = ((u,p,ϕ),(v,q,ψ)) -> ∫( ρw*((u⋅∇(u))⋅v) + μ*(∇(u)⊙∇(v)) + q*(∇⋅u) - p*(∇⋅v) +
+                              (u⋅∇(ϕ))⋅ψ + 𝒟*(∇(ϕ)⊙∇(ψ)) +
+                              τₘᵩ(u)*((∇(ϕ)'⋅u)⋅(∇(ψ)'⋅u)) )dΩ -
+                            ∫( ( nΓₘ'⋅(μ*(∇(u)⋅nΓₘ - p*nΓₘ)) ) * (v⋅nΓₘ) +
+                              (ϕ*(u⋅nΓₘ))*ψ )dΓₘ +
+                            ∫( (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
+                              α/h * (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * (v⋅nΓₘ) )dΓₘ +
+                            ∫( pout*nout⋅v )dΓout
   op = TransientFEOperator(res,X,Y)
+  op₀(θ₀) = FEOperator(res₀(θ₀),X₀,Y₀)
 
   # Solver
   nls = NLSolver(show_trace=true,method=:newton,iterations=10)
 
-  # solution
-  xₕ₀ = interpolate_everywhere([VectorValue(0,0),0,0,0],X(0))
+  # Initial solution
+  @unpack U∞₀ = params
+  θ₀ = U∞₀*Γin_measured/Vᵥ
+  uₕ₀,pₕ₀,ϕₕ₀ = solve(op₀(θ₀))
+  xₕ₀ = interpolate_everywhere([uₕ₀,pₕ₀,ϕₕ₀,θ₀],X(0))
 
   # Solver
   @unpack Δt,tf = params
@@ -169,13 +183,13 @@ This type defines a Parameters object with the default parameters for the
   nex::Int = 3 # Number of elements in x direction
   ney ::Int = 3 # Number of elements in y direction
   order::Int = 2 # Order of the finite elements
-  U∞::Float64 = 0.06 # Inlet velocity
+  U∞₀::Float64 = 0.06 # Inlet velocity
   ϕ∞::Float64 = 35000 # Initial feed concentration
   ΔP::Float64 = 4053000.0 # Pressure drop
   I₀::Float64 = 8.41e10
   κ::Float64 = 4955.144
   pₒ::Float64 = 0.0
-  Jᵣ::Float64 = 1 # Inertia rotor 
+  Jᵣ::Float64 = 1 # Inertia rotor
   Jₚ::Float64 = 1 # Inertia pump
   ρₐ::Float64 = 1 # Air density
   Rᵣ::Float64 = 1 # Rotor radius

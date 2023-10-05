@@ -59,11 +59,12 @@ params = NavierStokes_ConvectionDiffusion_static_withWT_params(
   μ=8.9e-4,
   ρw=1.027e3,
   𝒟=1.5e-9,
-  U∞=0.129,
+  U∞₀=0.129,
   ϕ∞=600,
   order=2,
   nex=100,ney=20,
-  tf=0.5
+  Δt = 1.0e-2,
+  tf=1.0e-1
 )
 solve_NSCD_static_withWT(params)
 
