@@ -1,4 +1,4 @@
-module NavierStokes_ConvectionDiffusion_Static
+module NavierStokes_ConvectionDiffusion_Static_pout
 """
     NavierStokes_ConvectionDiffusion
 
@@ -17,6 +17,7 @@ using Gridap.Fields: meas
 using Gridap.Geometry
 using Parameters
 using DrWatson
+using LineSearches: BackTracking
 
 export NavierStokes_ConvectionDiffusion_static_params, solve_NSCD_static
 
@@ -83,6 +84,8 @@ function solve_NSCD_static(params)
   Φ = TrialFESpace(Ψ,ϕin)
   X = MultiFieldFESpace([U,P,Φ])
   Y = MultiFieldFESpace([V,Q,Ψ])
+  X_ST = MultiFieldFESpace([U,P])
+  Y_ST = MultiFieldFESpace([V,Q])
 
   # Measures
   degree = 2*order
@@ -101,24 +104,43 @@ function solve_NSCD_static(params)
   c₁ = 4.0
   c₂ = 2.0
   h2 = CellField(get_cell_measure(Ω),Ω)
-  τₘᵩ(u) = 1/(c₁*(𝒟)/h2 + c₂*((u⋅u).^(1/2))/h)
+  abs_(u) = (u⋅u)^(1/2)
+  τₘᵩ(u) = 1/(c₁*(𝒟)/h2 + c₂*(abs_∘u)/h)
+
+  # Stokes operator
+  a((u,p),(v,q)) = ∫( μ*(∇(u)⊙∇(v)) )dΩ - 
+                   ∫( q*(∇⋅u) )dΩ - 
+                   ∫( p*(∇⋅v) )dΩ 
+  l((v,q)) = ∫(( (-1.0)*0.0*nout)⋅v)dΓout
+  op_ST = AffineFEOperator(a,l,X_ST,Y_ST)
 
   # Operators
-  res((u,p,ϕ),(v,q,ψ)) = ∫( ρw*((u⋅∇(u))⋅v) + μ*(∇(u)⊙∇(v)) - q*(∇⋅u) - p*(∇⋅v) +
-                            (u⋅∇(ϕ))⋅ψ + 𝒟*(∇(ϕ)⊙∇(ψ)) +
-                            τₘᵩ(u)*((∇(ϕ)'⋅u)⋅(∇(ψ)'⋅u)) )dΩ -
+  neg(a) = min(a,0.0)
+  c(a,∇u,v) = (∇u'⋅a)⋅v 
+  #c(a,u,v) = 0.5*((∇(u)'⋅a)⋅v - u⋅(∇(v)'⋅a))
+  res((u,p,ϕ),(v,q,ψ)) = ∫( ρw*(c∘(u,∇(u),v)) )dΩ + a((u,p),(v,q)) +
+                         ∫( τₘᵩ(u)*((∇(ϕ)'⋅u)⋅(∇(ψ)'⋅u)) )dΩ -
                          ∫( ( nΓₘ'⋅(μ*(∇(u)⋅nΓₘ - p*nΓₘ)) ) * (v⋅nΓₘ) +
                             (ϕ*(u⋅nΓₘ))*ψ )dΓₘ +
-                         ∫( ( ((ΔP-κ*ϕ)/I₀) - u⋅nΓₘ) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
-                            α/h * (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * (v⋅nΓₘ) )dΓₘ +
-                         ∫( pout*nout⋅v )dΓout
+                         ∫( ( ((pout-κ*ϕ)/I₀) - u⋅nΓₘ) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
+                            α/h * (u⋅nΓₘ - ((pout-κ*ϕ)/I₀)) * (v⋅nΓₘ) )dΓₘ +
+                            # ∫(( μ*(∇(u)⋅nout) - pout*nout)⋅v - (u⋅v)*( neg∘(u⋅nout)))dΓout 
+                            ∫(( pout*nout)⋅v)dΓout - ∫( (u⋅v)*( neg∘(u⋅nout)))dΓout 
   op = FEOperator(res,X,Y)
 
+  # Initial solution
+  uₕ₀,pₕ₀ = solve(op_ST)
+  filename = datadir("sims","sol0")
+  ϕₕ₀ = interpolate_everywhere(0.0,Φ)
+  writevtk(Ω,filename,cellfields=["u"=>uₕ₀,"p"=>pₕ₀,"phi"=>ϕₕ₀],order=order)
+  xₕ₀ = interpolate_everywhere((uₕ₀,pₕ₀,ϕₕ₀),X)
+
   # Solver
-  nls = NLSolver(show_trace=true,method=:newton,iterations=10)
+  nls = NLSolver(show_trace=true,method=:newton,iterations=10,linesearch=BackTracking())
 
   # solution
-  uₕ,pₕ,ϕₕ = solve(nls,op)
+  cache = solve!(xₕ₀,nls,op)
+  uₕ,pₕ,ϕₕ = xₕ₀
 
   # Post-processing
   filename = datadir("sims","sol")

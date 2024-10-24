@@ -17,8 +17,28 @@ using Gridap.Fields: meas
 using Gridap.Geometry
 using Parameters
 using DrWatson
+using GridInterpolations
+using MAT
 
 export NavierStokes_ConvectionDiffusion_static_withWT_params, solve_NSCD_static_withWT
+
+# import MATLAB table for WT coefficients
+#file = matopen("C:/Users/fgreco/Documents/GitHub/SaltyWater.jl/WTdata/DOT500kW_single.mat")
+file = matopen("WTdata/DOT500kW_single.mat")
+wt = read(file,"wt")
+β_table = wt["ct"]["beta"]
+tsr_table = wt["ct"]["tsr"]
+table = wt["ct"]["table"]
+#println(vec(β),vec(tsr))
+ 
+
+# create two-dimensional interpolation grids (grid), a data array (gridData), and a point of interest (β_tsr_point(β,tsr))
+grid = RectangleGrid(vec(β_table),vec(tsr_table))
+gridData = table
+
+
+# Here you may include files from the source directory
+#include(WTdatadir("DOT500kW_single.mat"))
 
 """
     solve_NSCD_static_withWT(params)
@@ -98,8 +118,15 @@ function solve_NSCD_static_withWT(params)
   dΓin = Measure(Γin,degree)
 
   # Physics parameters
-  @unpack μ,ρw,𝒟,ΔP,I₀,κ,Jᵣ,Jₚ,ρₐ,Rᵣ,Vᵥ,Pᵢ = params
-  Cₜ(θ,Uᵥ) = 0.1
+  @unpack μ,ρw,𝒟,ΔP,I₀,κ,Jᵣ,Jₚ,ρₐ,Rᵣ,Vᵥ,Pᵢ,β = params
+  function Cₜ(θ,Uᵥ) 
+    tsr = θ*Rᵣ/Uᵥ
+    β_tsr_point = [ β, tsr]  #β=[0,0.200,...,90]; tsr=[0.0800,0.1600,...,20]
+    ct=GridInterpolations.interpolate(grid,gridData,β_tsr_point)
+  end
+
+
+
   Uᵥ(t) = 1 # Wind velocity
   Γin_measured = ∑(∫(1.0)dΓin)
   U∞(θ)=Vᵥ*θ/Γin_measured
@@ -124,7 +151,7 @@ function solve_NSCD_static_withWT(params)
                          ∫( (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
                             α/h * (u⋅nΓₘ - ((ΔP-κ*ϕ)/I₀)) * (v⋅nΓₘ) )dΓₘ +
                          ∫( pout*nout⋅v )dΓout +
-                         ∫(( (Jᵣ+Jₚ)*∂t(θ) - 1/2*ρₐ*Rᵣ*(Uᵥ(t))^2*Cₜ(θ,Uᵥ)+Vᵥ*(Pᵢ-p) )*s/Γin_measured +
+                         ∫(( (Jᵣ+Jₚ)*∂t(θ) - 1/2*ρₐ*Rᵣ*(Uᵥ(t))^2*(Cₜ∘(θ,Uᵥ))+Vᵥ*(Pᵢ-p) )*s/Γin_measured +
                            (u-uin(θ)) ⋅ ( μ*∇(v)⋅nΓin - q*nΓin) + α/h * (u - uin(θ)) ⋅ v )dΓin
   res₀(θ₀) = ((u,p,ϕ),(v,q,ψ)) -> ∫( ρw*((u⋅∇(u))⋅v) + μ*(∇(u)⊙∇(v)) + q*(∇⋅u) - p*(∇⋅v) +
                               (u⋅∇(ϕ))⋅ψ + 𝒟*(∇(ϕ)⊙∇(ψ)) +
@@ -197,5 +224,6 @@ This type defines a Parameters object with the default parameters for the
   Pᵢ::Float64 = 0 # Inlet pressure HPP
   Δt::Float64 = 0.1 # Time step
   tf::Float64 = 0.1 # Final time
+  β::Float64 = 0 # Pitch angle
 end
 end
