@@ -54,8 +54,8 @@ function solve_NSCD_static(params)
 
   # Define boundary tags
   labels_Ω = get_face_labeling(𝒯)
-  add_tag_from_tags!(labels_Ω,"membrane",[1,2,3,4,5,6])    # assign the label "bottom" to the entity 1,2 and 5 (bottom corners and bottom side)
-  add_tag_from_tags!(labels_Ω,"inlet",[7])         # assign the label "inlet" to the entity 7 (left side)
+  add_tag_from_tags!(labels_Ω,"membrane",[2,4,5,6])    # assign the label "bottom" to the entity 1,2 and 5 (bottom corners and bottom side)
+  add_tag_from_tags!(labels_Ω,"inlet",[1,3,7])         # assign the label "inlet" to the entity 7 (left side)
   add_tag_from_tags!(labels_Ω,"outlet",[8])        # assign the label "outlet" to the entity 8 (right side)
 
   # Define boundaries
@@ -66,7 +66,8 @@ function solve_NSCD_static(params)
 
   # Boundary condition
   @unpack U∞,ϕ∞,pₒ = params
-  uin((x,y)) = VectorValue(6*U∞*y/H*(1.0-(y/H)),0.0)
+  #uin((x,y)) = VectorValue(6*U∞*y/H*(1.0-(y/H)),0.0)
+  uin((x,y)) = VectorValue(U∞,0.0)
   utop((x,y)) = VectorValue(0.0,0.0)
   ϕin((x,y)) = ϕ∞
   pout((x,y)) = pₒ
@@ -119,7 +120,9 @@ function solve_NSCD_static(params)
   c(a,∇u,v) = (∇u'⋅a)⋅v 
   #c(a,u,v) = 0.5*((∇(u)'⋅a)⋅v - u⋅(∇(v)'⋅a))
   res((u,p,ϕ),(v,q,ψ)) = ∫( ρw*(c∘(u,∇(u),v)) )dΩ + a((u,p),(v,q)) +
-                         ∫( τₘᵩ(u)*((∇(ϕ)'⋅u)⋅(∇(ψ)'⋅u)) )dΩ -
+                         ∫( #τₘᵩ(u)*((∇(ϕ)'⋅u)⋅(∇(ψ)'⋅u)) +
+                         #(u⋅∇(ϕ))⋅ψ + 
+                         𝒟*(∇(ϕ)⊙∇(ψ)) )dΩ -
                          ∫( ( nΓₘ'⋅(μ*(∇(u)⋅nΓₘ - p*nΓₘ)) ) * (v⋅nΓₘ) +
                             (ϕ*(u⋅nΓₘ))*ψ )dΓₘ +
                          ∫( ( ((pout-κ*ϕ)/I₀) - u⋅nΓₘ) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +

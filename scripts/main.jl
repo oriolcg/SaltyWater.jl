@@ -52,7 +52,7 @@ solve_NSCD_static(params)
    ϕ∞=600,
    order=2,
    nex=600,ney=30,
-   pₒ= 20000,
+   pₒ= 200,
  )
  solve_NSCD_static(params)
 
