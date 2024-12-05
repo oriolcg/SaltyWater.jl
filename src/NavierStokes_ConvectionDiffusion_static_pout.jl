@@ -61,13 +61,15 @@ function solve_NSCD_static(params)
   # Define boundaries
   Γout = Boundary(Ω, tags="outlet")
   Γₘ = Boundary(Ω, tags="membrane")
+  Γin = Boundary(Ω,tags="inlet")
   nΓₘ = get_normal_vector(Γₘ)
   nout = get_normal_vector(Γout)
+  nin = get_normal_vector(Γin)
 
   # Boundary condition
   @unpack U∞,ϕ∞,pₒ = params
-  #uin((x,y)) = VectorValue(6*U∞*y/H*(1.0-(y/H)),0.0)
-  uin((x,y)) = VectorValue(U∞,0.0)
+  uin((x,y)) = VectorValue(6*U∞*y/H*(1.0-(y/H)),0.0)
+  # uin((x,y)) = VectorValue(U∞,0.0)
   utop((x,y)) = VectorValue(0.0,0.0)
   ϕin((x,y)) = ϕ∞
   pout((x,y)) = pₒ
@@ -93,6 +95,7 @@ function solve_NSCD_static(params)
   dΩ = Measure(Ω,degree)
   dΓₘ = Measure(Γₘ,degree)
   dΓout = Measure(Γout,degree)
+  dΓin = Measure(Γin,degree)
 
   # Physics parameters
   @unpack μ,ρw,𝒟,ΔP,I₀,κ = params
@@ -134,7 +137,7 @@ function solve_NSCD_static(params)
   # Initial solution
   uₕ₀,pₕ₀ = solve(op_ST)
   filename = datadir("sims","sol0")
-  ϕₕ₀ = interpolate_everywhere(0.0,Φ)
+  ϕₕ₀ = interpolate_everywhere(ϕin,Φ)
   writevtk(Ω,filename,cellfields=["u"=>uₕ₀,"p"=>pₕ₀,"phi"=>ϕₕ₀],order=order)
   xₕ₀ = interpolate_everywhere((uₕ₀,pₕ₀,ϕₕ₀),X)
 
@@ -151,8 +154,12 @@ function solve_NSCD_static(params)
 
   m = ρw*L*(∑(∫(abs(uₕ⋅nΓₘ))dΓₘ))/L  # per unit width, according to Carro2022
   println("Mass flow rate: ",m)
+
+  pin = ∑(∫(pₕ)dΓin)/H
+  uout = ∑(∫(uₕ⋅nout)dΓout)/H
+  ϕout = ∑(∫(ϕₕ)dΓout)/H
   
-  return nothing
+  return uout, ϕout, pin
 
 end
 

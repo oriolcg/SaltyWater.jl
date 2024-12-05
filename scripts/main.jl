@@ -3,6 +3,9 @@ module Main
 using DrWatson
 @quickactivate "SaltyWater.jl"
 
+using CSV
+using DataFrames
+
 # Here you may include files from the source directory
 include(srcdir("NavierStokes_ConvectionDiffusion.jl"))
 include(srcdir("NavierStokes_ConvectionDiffusion_static.jl"))
@@ -37,24 +40,43 @@ Path of active project: $(projectdir())
 # solve_NSCD(params)
 
 params = NavierStokes_ConvectionDiffusion_static_params(ney=6)
-solve_NSCD_static(params)
+_,_,_ = solve_NSCD_static(params)
 
 #params = NavierStokes_ConvectionDiffusion_static_withWT_params(ney=6)
 #solve_NSCD_static_withWT(params)
 
- params = NavierStokes_ConvectionDiffusion_static_params(
-   H=7.4e-4,
-   L=1.5e-2,
-   μ=8.9e-4,
-   ρw=1.027e3,
-   𝒟=1.5e-9,
-   U∞=  0.09, #0.129, #,0.258, #
-   ϕ∞=600,
-   order=2,
-   nex=600,ney=30,
-   pₒ= 200,
- )
- solve_NSCD_static(params)
+p_out_vec = [200,300,400]
+u_vec = Float64[]
+ϕ_vec = Float64[]
+p_vec = Float64[]
+
+for p_out in p_out_vec
+  params = NavierStokes_ConvectionDiffusion_static_params(
+    H=7.4e-4,
+    L=1.5e-2,
+    μ=8.9e-4,
+    ρw=1.027e3,
+    𝒟=1.5e-9,
+    U∞=  0.09, #0.129, #,0.258, #
+    ϕ∞=600,
+    order=2,
+    nex=600,ney=30,
+    pₒ= p_out,
+  )
+  u, ϕ, p = solve_NSCD_static(params)
+  push!(u_vec,u)
+  push!(ϕ_vec,ϕ)
+  push!(p_vec,p)
+end
+
+ file = open("./data.csv","w")
+ df = DataFrame(u=u_vec, ϕ = ϕ_vec, p=p_vec, p_out = p_out_vec)
+ @show df
+ CSV.write(file,df)
+ 
+ close(file)
+
+
 
 #params = NavierStokes_ConvectionDiffusion_static_withWT_params(
   #H=7.4e-4,
