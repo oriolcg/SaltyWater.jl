@@ -50,6 +50,7 @@ function solve_NSCD_static(params)
     return VectorValue(x[1],yᵢ)
   end
   𝒯 = simplexify(CartesianDiscreteModel((0,L,0,H), (nex,ney),map=coord_map))
+  # 𝒯 = CartesianDiscreteModel((0,L,0,H), (nex,ney),map=coord_map)
   Ω = Interior(𝒯)
 
   # Define boundary tags
@@ -78,7 +79,7 @@ function solve_NSCD_static(params)
   @unpack order = params
   reffeᵤ = ReferenceFE(lagrangian,VectorValue{2,Float64},order)
   reffeₚ = ReferenceFE(lagrangian,Float64,order-1)
-  reffeᵩ = ReferenceFE(lagrangian,Float64,order-1)
+  reffeᵩ = ReferenceFE(lagrangian,Float64,order)
   V = TestFESpace(Ω,reffeᵤ, conformity=:C0, dirichlet_tags=["inlet","membrane"],dirichlet_masks=[(true,true),(true,false)]) #only for U, first is Ux, second is Uy
   U = TrialFESpace(V, [uin,utop])
   Q = TestFESpace(Ω,reffeₚ, conformity=:C0)
@@ -99,9 +100,11 @@ function solve_NSCD_static(params)
 
   # Physics parameters
   @unpack μ,ρw,𝒟,ΔP,I₀,κ = params
+  ν = μ/ρw
 
   # Mesh related variables
   h = CellField(lazy_map(dx->dx^(1/2),get_cell_measure(Ω)),Ω)
+  ha = L/nex
   α = 1.0e3 #parameter that imposes how strongly the BCs need to be satisfied. The higher, the "more satisfied" they need to be. Too high, there's the risk of not converging. 
 
   # Stabilization Parameters
@@ -109,10 +112,14 @@ function solve_NSCD_static(params)
   c₂ = 2.0
   h2 = CellField(get_cell_measure(Ω),Ω)
   abs_(u) = (u⋅u)^(1/2)
-  τₘᵩ(u) = 1/(c₁*(𝒟)/h2 + c₂*(abs_∘u)/h)
+  τₘᵩ(u) = 1/(c₁*(order^4)*(𝒟)/h2 + c₂*order*(abs_∘(u))/ha)
+  τₘᵤ(u) = 1/(c₁*(order^4)*(ν)/h2 + c₂*order*(abs_∘(u))/ha)
+  # τₘᵩ(u) = 1/(c₂*U∞/h)
+  # τₘᵤ(u) = 1/(c₂*U∞/h)
+
 
   # Stokes operator
-  a((u,p),(v,q)) = ∫( μ*(∇(u)⊙∇(v)) )dΩ - 
+  a((u,p),(v,q)) = ∫( ν*(∇(u)⊙∇(v)) )dΩ - 
                    ∫( q*(∇⋅u) )dΩ - 
                    ∫( p*(∇⋅v) )dΩ 
   l((v,q)) = ∫(( (-1.0)*0.0*nout)⋅v)dΓout
@@ -122,13 +129,14 @@ function solve_NSCD_static(params)
   neg(a) = min(a,0.0)
   c(a,∇u,v) = (∇u'⋅a)⋅v 
   #c(a,u,v) = 0.5*((∇(u)'⋅a)⋅v - u⋅(∇(v)'⋅a))
-  res((u,p,ϕ),(v,q,ψ)) = ∫( ρw*(c∘(u,∇(u),v)) )dΩ + a((u,p),(v,q)) +
-                         ∫( #τₘᵩ(u)*((∇(ϕ)'⋅u)⋅(∇(ψ)'⋅u)) +
-                         #(u⋅∇(ϕ))⋅ψ + 
+  res((u,p,ϕ),(v,q,ψ)) = ∫( (c∘(u,∇(u),v)) )dΩ + a((u,p),(v,q)) +
+                         ∫( τₘᵩ(u)*((∇(ϕ)'⋅u-𝒟*(tr(∇∇(ϕ))))⋅((∇(ψ)'⋅u)+𝒟*(tr(∇∇(ψ))))) +
+                            τₘᵤ(u)*(((∇(u)'⋅u)+∇(p)-ν*(tr(∇∇(u))))⋅((∇(v)'⋅u)+∇(q)+ν*(tr(∇∇(v))))) +
+                         (u⋅∇(ϕ))⋅ψ + 
                          𝒟*(∇(ϕ)⊙∇(ψ)) )dΩ -
-                         ∫( ( nΓₘ'⋅(μ*(∇(u)⋅nΓₘ - p*nΓₘ)) ) * (v⋅nΓₘ) +
+                         ∫( ( nΓₘ'⋅(ν*(∇(u)⋅nΓₘ - p*nΓₘ)) ) * (v⋅nΓₘ) +
                             (ϕ*(u⋅nΓₘ))*ψ )dΓₘ +
-                         ∫( ( ((pout-κ*ϕ)/I₀) - u⋅nΓₘ) * ( nΓₘ'⋅(μ*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
+                         ∫( ( ((pout-κ*ϕ)/I₀) - u⋅nΓₘ) * ( nΓₘ'⋅(ν*(∇(v)⋅nΓₘ - q*nΓₘ)) ) +
                             α/h * (u⋅nΓₘ - ((pout-κ*ϕ)/I₀)) * (v⋅nΓₘ) )dΓₘ +
                             # ∫(( μ*(∇(u)⋅nout) - pout*nout)⋅v - (u⋅v)*( neg∘(u⋅nout)))dΓout 
                             ∫(( pout*nout)⋅v)dΓout - ∫( (u⋅v)*( neg∘(u⋅nout)))dΓout 
@@ -142,7 +150,7 @@ function solve_NSCD_static(params)
   xₕ₀ = interpolate_everywhere((uₕ₀,pₕ₀,ϕₕ₀),X)
 
   # Solver
-  nls = NLSolver(show_trace=true,method=:newton,iterations=10,linesearch=BackTracking())
+  nls = NLSolver(show_trace=true,method=:newton,iterations=10)#,linesearch=BackTracking())
 
   # solution
   cache = solve!(xₕ₀,nls,op)
