@@ -39,34 +39,37 @@ Path of active project: $(projectdir())
 #   ϕ∞=35000.0)
 # solve_NSCD(params)
 
-params = NavierStokes_ConvectionDiffusion_static_params(nex=12,ney=3)
+params = NavierStokes_ConvectionDiffusion_static_params(ney=6)
 _,_,_ = solve_NSCD_static(params)
 
 #params = NavierStokes_ConvectionDiffusion_static_withWT_params(ney=6)
 #solve_NSCD_static_withWT(params)
 
-p_out_vec = [8000]
+p_out_vec = [float(ENV["Pressure"])]
+U_vec = [float(ENV["Velocity"])]
 u_vec = Float64[]
 ϕ_vec = Float64[]
 p_vec = Float64[]
 
 for p_out in p_out_vec
-  params = NavierStokes_ConvectionDiffusion_static_params(
-    H=7.4e-4,
-    L=(1.5e-1)/2,
-    μ=8.9e-4,
-    ρw=1.027e3,
-    𝒟=1.5e-9,
-    U∞=  0.09, #0.129, #,0.258, #
-    ϕ∞=600,
-    order=2,
-    nex=600,ney=15,
-    pₒ= p_out,
-  )
-  u, ϕ, p = solve_NSCD_static(params)
-  push!(u_vec,u)
-  push!(ϕ_vec,ϕ)
-  push!(p_vec,p)
+  for U in U_vec
+    params = NavierStokes_ConvectionDiffusion_static_params(
+      H=7.4e-4,
+      L=(1.5e-1)/2,
+      μ=8.9e-4,
+      ρw=1.027e3,
+      𝒟=1.5e-9,
+      U∞= U,# 0.09, #0.129, #,0.258, #
+      ϕ∞=600,
+      order=2,
+      nex=600,ney=15,
+      pₒ= p_out,
+    )
+    u, ϕ, p = solve_NSCD_static(params)
+    push!(u_vec,u)
+    push!(ϕ_vec,ϕ)
+    push!(p_vec,p)
+  end
 end
 
  file = open("./data.csv","w")
